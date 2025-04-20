@@ -4,7 +4,7 @@ import { EventEmitter, once } from "events";
 import { Server as HttpServer, createServer, IncomingMessage as HttpIncomingMessage } from "http";
 import { DeviceNotFoundError, EufySecurity, InvalidCountryCodeError, InvalidLanguageCodeError, InvalidPropertyValueError, libVersion, NotSupportedError, ReadOnlyPropertyError, StationNotFoundError, WrongStationError, PropertyNotSupportedError, InvalidPropertyError, InvalidCommandValueError, Device, LivestreamNotRunningError as EufyLivestreamNotRunningError, LivestreamAlreadyRunningError as EufyLivestreamAlreadyRunningError, InvalidPropertyError as EufyInvalidPropertyError, PropertyNotSupportedError as EufyPropertyNotSupportedError, StationConnectTimeoutError, RTSPPropertyNotEnabledError, Station } from "eufy-security-client";
 
-import { EventForwarder } from "./forward.js";
+import { EventForwarder, EmailNotificationOptions } from "./forward.js";
 import type * as OutgoingMessages from "./outgoing_message.js";
 import { IncomingMessage } from "./incoming_message.js";
 import { version, minSchemaVersion, maxSchemaVersion } from "./const.js";
@@ -302,7 +302,15 @@ export class ClientsController {
     }
 
     constructor(public driver: EufySecurity, private logger: Logger<ILogObj>) {
-        this.eventForwarder = new EventForwarder(this, logger);
+        const emailOptions: EmailNotificationOptions = {
+            senderEmail: process.env.EMAIL_SENDER || "",
+            recipientEmail: process.env.EMAIL_RECIPIENT || "",
+            smtpHost: process.env.SMTP_HOST || "",
+            smtpPort: parseInt(process.env.SMTP_PORT || "587", 10),
+            smtpPassword: process.env.SMTP_PASSWORD || "",
+            smtpUser: process.env.SMTP_USER || undefined,
+        };
+        this.eventForwarder = new EventForwarder(this, logger, emailOptions);
         this.eventForwarder.start();
     }
 

@@ -1,6 +1,7 @@
 import { AudioCodec, CommandResult, CommandType, Device,  ErrorCode, ParamType, PropertyValue, Station, StreamMetadata, VideoCodec, AlarmEvent, SmartSafeAlarm911Event, SmartSafeShakeAlarmEvent, TalkbackStream, Schedule, Picture, DatabaseReturnCode, DatabaseQueryLatestInfo, DatabaseQueryLocal, DatabaseCountByDate } from "eufy-security-client";
 import { Readable } from "stream";
 import { ILogObj, Logger } from "tslog";
+import nodemailer from "nodemailer";
 
 import { JSONValue, OutgoingEvent } from "./outgoing_message.js";
 import { dumpStation } from "./station/state.js";
@@ -16,9 +17,31 @@ import { DeviceMessageHandler } from "./device/message_handler.js";
 import { DriverMessageHandler } from "./driver/message_handler.js";
 import { convertCamelCaseToSnakeCase } from "./utils.js";
 
-export class EventForwarder {
+export interface EmailNotificationOptions {
+    senderEmail: string;
+    recipientEmail: string;
+    smtpHost: string;
+    smtpPort: number;
+    smtpPassword: string;
+    smtpUser?: string; // Optional: for SMTP auth if different from senderEmail
+}
 
-    constructor(private clients: ClientsController, private logger: Logger<ILogObj>) {}
+export class EventForwarder {
+    private pendingNotifications: Map<string, { eventType: string, device: Device, extra?: any }[]> = new Map();
+    private options: EmailNotificationOptions;
+
+    /**
+     * @param clients
+     * @param logger
+     * @param options - Email and SMTP configuration
+     */
+    constructor(
+        private clients: ClientsController,
+        private logger: Logger<ILogObj>,
+        options: EmailNotificationOptions
+    ) {
+        this.options = options;
+    }
 
     public start(): void {
 
@@ -435,7 +458,17 @@ export class EventForwarder {
                 });
         });
 
-        this.clients.driver.on("station image download", (station: Station, file: string, image: Picture) => {
+        this.clients.driver.on("station image download", (station: Station, file: string, image: any) => {
+            // Find pending notifications for this station/device
+            const serial = station.getSerial();
+            const pending = this.pendingNotifications.get(serial);
+            if (pending && pending.length > 0) {
+                // Send all pending notifications for this device
+                for (const notif of pending) {
+                    this.sendNotificationEmail(notif.eventType, notif.device, notif.extra, image);
+                }
+                this.pendingNotifications.delete(serial);
+            }
             this.forwardEvent({
                 source: "station",
                 event: StationEvent.imageDownloaded,
@@ -802,7 +835,22 @@ export class EventForwarder {
     }
 
     private setupDevice(device: Device): void {
-        device.on("motion detected", (device: Device, state: boolean) => {
+        device.on("motion detected", async (device: Device, state: boolean) => {
+            if (state) {
+                // Find the station for this device
+                const station = await this.clients.driver.getStation(device.getStationSerial());
+                // Store pending notification
+                const serial = station.getSerial();
+                if (!this.pendingNotifications.has(serial)) {
+                    this.pendingNotifications.set(serial, []);
+                }
+                this.pendingNotifications.get(serial)!.push({ eventType: "Motion Detected", device });
+                // Trigger snapshot
+                if (typeof station.downloadImage === 'function') {
+                    // Use a timestamp or unique file name if needed
+                    station.downloadImage(Date.now().toString());
+                }
+            }
             this.forwardEvent({
                 source: "device",
                 event: DeviceEvent.motionDetected,
@@ -1102,6 +1150,36 @@ export class EventForwarder {
                 serialNumber: device.getSerial(),
                 state: state,
             }, 21);
+        });
+    }
+
+    private sendNotificationEmail(eventType: string, device: Device, extra?: any, image?: any) {
+        const mailOptions: any = {
+            from: this.options.senderEmail,
+            to: this.options.recipientEmail,
+            subject: `[Eufy] ${eventType} on device ${device.getSerial()}`,
+            text: `Event: ${eventType}\nDevice: ${device.getName()} (${device.getSerial()})\n${extra ? JSON.stringify(extra) : ""}`
+        };
+        if (image && image.data) {
+            mailOptions.attachments = [{
+                filename: 'snapshot.jpg',
+                content: Buffer.from(image.data, 'base64'),
+                contentType: 'image/jpeg'
+            }];
+        }
+        const transporter = nodemailer.createTransport({
+            host: this.options.smtpHost,
+            port: this.options.smtpPort,
+            secure: this.options.smtpPort === 465, // true for 465, false for other ports
+            auth: {
+                user: this.options.smtpUser || this.options.senderEmail,
+                pass: this.options.smtpPassword
+            }
+        });
+        transporter.sendMail(mailOptions, (error: any, info: any) => {
+            if (error) {
+                console.error("Error sending email:", error);
+            }
         });
     }
 
