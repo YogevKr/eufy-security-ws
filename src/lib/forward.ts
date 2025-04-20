@@ -1157,7 +1157,7 @@ export class EventForwarder {
         const mailOptions: any = {
             from: this.options.senderEmail,
             to: this.options.recipientEmail,
-            subject: `[Eufy] ${eventType} on device ${device.getSerial()}`,
+            subject: `[Eufy] ${eventType} on device ${device.getName()}`,
             text: `Event: ${eventType}\nDevice: ${device.getName()} (${device.getSerial()})\n${extra ? JSON.stringify(extra) : ""}`
         };
         if (image && image.data) {
