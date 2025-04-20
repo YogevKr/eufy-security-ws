@@ -16,13 +16,7 @@ WORKDIR /usr/src/app
 COPY --from=prod /tmp_prod ./
 RUN apk add --no-cache jq
 RUN apk add --no-cache bash
-# Email/SMTP configuration environment variables
-ENV EMAIL_SENDER="" \
-    EMAIL_RECIPIENT="" \
-    SMTP_HOST="" \
-    SMTP_PORT=587 \
-    SMTP_PASSWORD="" \
-    SMTP_USER=""
+
 EXPOSE 3000
 VOLUME ["/data"]
 CMD [ "/usr/src/app/run.sh" ]
