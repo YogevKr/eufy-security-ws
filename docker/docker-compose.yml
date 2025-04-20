@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   eufy-security:
-    image: eufy-security
+    build: .
     container_name: eufy-security
     network_mode: host
     restart: unless-stopped
