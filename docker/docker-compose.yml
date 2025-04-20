@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   eufy-security:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: eufy-security
     network_mode: host
     restart: unless-stopped
