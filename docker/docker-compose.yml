@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  eufy-security:
+    image: eufy-security
+    container_name: eufy-security
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      # Eufy credentials and config (set these in your .env file or export as env vars)
+      USERNAME: ${USERNAME}
+      PASSWORD: ${PASSWORD}
+      PORT: ${PORT}
+      COUNTRY: ${COUNTRY}
+      DEBUG: ${DEBUG}
+      # Email/SMTP configuration
+      EMAIL_SENDER: ${EMAIL_SENDER}
+      EMAIL_RECIPIENT: ${EMAIL_RECIPIENT}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_USER: ${SMTP_USER}
+    volumes:
+      - ./data:/data 
