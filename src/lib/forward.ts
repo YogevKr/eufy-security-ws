@@ -1178,7 +1178,9 @@ export class EventForwarder {
         });
         transporter.sendMail(mailOptions, (error: any, info: any) => {
             if (error) {
-                console.error("Error sending email:", error);
+                this.logger.error("Error sending email:", error);
+            } else {
+                this.logger.info(`Email sent successfully: ${info.response}`);
             }
         });
     }
