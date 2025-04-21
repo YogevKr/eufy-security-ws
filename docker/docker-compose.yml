@@ -5,7 +5,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: eufy-security-ws
     network_mode: host
     restart: unless-stopped
     environment:
