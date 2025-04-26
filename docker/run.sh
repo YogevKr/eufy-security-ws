@@ -54,7 +54,7 @@ POLLING_INTERVAL_MINUTES_JQ=""
 if [ -n "${POLLING_INTERVAL_MINUTES}" ]; then
     POLLING_INTERVAL_MINUTES_JQ="pollingIntervalMinutes: \$polling_interval_minutes|tonumber,"
 else
-    POLLING_INTERVAL_MINUTES=null
+    POLLING_INTERVAL_MINUTES="0.333" # 20 seconds
 fi
 
 ACCEPT_INVITATIONS_JQ=""
