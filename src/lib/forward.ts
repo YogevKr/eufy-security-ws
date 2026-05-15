@@ -1307,7 +1307,12 @@ export class EventForwarder {
 
     device.on(
       "person detected",
-      (device: Device, state: boolean, person: string) => {
+      async (device: Device, state: boolean, person: string) => {
+        if (state) {
+          await this.queueSnapshotNotification("Person Detected", device, {
+            person,
+          });
+        }
         this.forwardEvent(
           {
             source: "device",
@@ -1548,17 +1553,26 @@ export class EventForwarder {
       );
     });
 
-    device.on("stranger person detected", (device: Device, state: boolean) => {
-      this.forwardEvent(
-        {
-          source: "device",
-          event: DeviceEvent.strangerPersonDetected,
-          serialNumber: device.getSerial(),
-          state: state,
-        },
-        15,
-      );
-    });
+    device.on(
+      "stranger person detected",
+      async (device: Device, state: boolean) => {
+        if (state) {
+          await this.queueSnapshotNotification(
+            "Stranger Person Detected",
+            device,
+          );
+        }
+        this.forwardEvent(
+          {
+            source: "device",
+            event: DeviceEvent.strangerPersonDetected,
+            serialNumber: device.getSerial(),
+            state: state,
+          },
+          15,
+        );
+      },
+    );
 
     device.on("dog detected", (device: Device, state: boolean) => {
       this.forwardEvent(
