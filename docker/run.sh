@@ -113,9 +113,11 @@ if [ -n "$PORT" ]; then
 fi
 
 DEBUG_OPTION=""
-if [ -n "$DEBUG" ]; then
-    DEBUG_OPTION="-v"
-fi
+case "$(echo "${DEBUG:-}" | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|y|on)
+        DEBUG_OPTION="-v"
+        ;;
+esac
 
 JSON_STRING="$( jq -n \
   --arg username "$USERNAME" \

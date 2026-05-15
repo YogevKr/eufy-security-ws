@@ -7,6 +7,11 @@ services:
       dockerfile: docker/Dockerfile
     network_mode: host
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       # Eufy credentials and config (set these in your .env file or export as env vars)
       USERNAME: ${USERNAME}
@@ -22,4 +27,4 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_USER: ${SMTP_USER}
     volumes:
-      - ./data:/data 
+      - ./data:/data

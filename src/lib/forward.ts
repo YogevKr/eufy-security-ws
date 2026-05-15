@@ -834,22 +834,22 @@ export class EventForwarder {
         });
     }
 
+    private async queueSnapshotNotification(eventType: string, device: Device, extra?: any): Promise<void> {
+        const station = await this.clients.driver.getStation(device.getStationSerial());
+        const serial = station.getSerial();
+        if (!this.pendingNotifications.has(serial)) {
+            this.pendingNotifications.set(serial, []);
+        }
+        this.pendingNotifications.get(serial)!.push({ eventType, device, extra });
+        if (typeof station.downloadImage === "function") {
+            station.downloadImage(Date.now().toString());
+        }
+    }
+
     private setupDevice(device: Device): void {
         device.on("motion detected", async (device: Device, state: boolean) => {
             if (state) {
-                // Find the station for this device
-                const station = await this.clients.driver.getStation(device.getStationSerial());
-                // Store pending notification
-                const serial = station.getSerial();
-                if (!this.pendingNotifications.has(serial)) {
-                    this.pendingNotifications.set(serial, []);
-                }
-                this.pendingNotifications.get(serial)!.push({ eventType: "Motion Detected", device });
-                // Trigger snapshot
-                if (typeof station.downloadImage === 'function') {
-                    // Use a timestamp or unique file name if needed
-                    station.downloadImage(Date.now().toString());
-                }
+                await this.queueSnapshotNotification("Motion Detected", device);
             }
             this.forwardEvent({
                 source: "device",
@@ -878,7 +878,10 @@ export class EventForwarder {
             }, 0);
         });
 
-        device.on("pet detected", (device: Device, state: boolean) => {
+        device.on("pet detected", async (device: Device, state: boolean) => {
+            if (state) {
+                await this.queueSnapshotNotification("Pet Detected", device);
+            }
             this.forwardEvent({
                 source: "device",
                 event: DeviceEvent.petDetected,
