@@ -13,8 +13,8 @@
     "access": "public"
   },
   "scripts": {
-    "lint": "eslint --ext .ts .",
-    "lint:fix": "eslint --fix --ext .ts . && prettier -w .",
+    "lint": "eslint src",
+    "lint:fix": "eslint --fix src && prettier -w .",
     "test": "prettier --check src && tsc --noEmit && npm run lint",
     "build": "tsc -p .",
     "prepublishOnly": "rm -rf dist tsconfig.tsbuildinfo && npm run build",
