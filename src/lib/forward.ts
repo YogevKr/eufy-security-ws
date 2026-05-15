@@ -5,6 +5,8 @@ import {
   Device,
   ErrorCode,
   ParamType,
+  Picture,
+  PropertyName,
   PropertyValue,
   Station,
   StreamMetadata,
@@ -37,6 +39,13 @@ import { DeviceMessageHandler } from "./device/message_handler.js";
 import { DriverMessageHandler } from "./driver/message_handler.js";
 import { convertCamelCaseToSnakeCase } from "./utils.js";
 
+interface PendingNotification {
+  eventType: string;
+  device: Device;
+  extra?: any;
+  timeout?: NodeJS.Timeout;
+}
+
 export interface EmailNotificationOptions {
   senderEmail: string;
   recipientEmail: string;
@@ -47,10 +56,7 @@ export interface EmailNotificationOptions {
 }
 
 export class EventForwarder {
-  private pendingNotifications: Map<
-    string,
-    { eventType: string; device: Device; extra?: any }[]
-  > = new Map();
+  private pendingNotifications: Map<string, PendingNotification[]> = new Map();
   private options: EmailNotificationOptions;
 
   /**
@@ -630,19 +636,7 @@ export class EventForwarder {
       (station: Station, file: string, image: any) => {
         // Find pending notifications for this station/device
         const serial = station.getSerial();
-        const pending = this.pendingNotifications.get(serial);
-        if (pending && pending.length > 0) {
-          // Send all pending notifications for this device
-          for (const notif of pending) {
-            this.sendNotificationEmail(
-              notif.eventType,
-              notif.device,
-              notif.extra,
-              image,
-            );
-          }
-          this.pendingNotifications.delete(serial);
-        }
+        this.sendPendingNotifications(serial, image);
         this.forwardEvent(
           {
             source: "station",
@@ -655,6 +649,64 @@ export class EventForwarder {
         );
       },
     );
+  }
+
+  private removePendingNotification(
+    stationSerial: string,
+    notification: PendingNotification,
+  ): void {
+    const pending = this.pendingNotifications.get(stationSerial);
+    if (!pending) {
+      return;
+    }
+    const index = pending.indexOf(notification);
+    if (index >= 0) {
+      pending.splice(index, 1);
+    }
+    if (notification.timeout) {
+      clearTimeout(notification.timeout);
+    }
+    if (pending.length === 0) {
+      this.pendingNotifications.delete(stationSerial);
+    }
+  }
+
+  private sendPendingNotifications(
+    stationSerial: string,
+    image?: Picture,
+  ): void {
+    const pending = [...(this.pendingNotifications.get(stationSerial) ?? [])];
+    for (const notification of pending) {
+      this.sendNotificationEmail(
+        notification.eventType,
+        notification.device,
+        notification.extra,
+        image,
+      );
+      this.removePendingNotification(stationSerial, notification);
+    }
+  }
+
+  private sendPendingDeviceNotifications(
+    stationSerial: string,
+    device: Device,
+    image?: Picture,
+  ): void {
+    const pending = this.pendingNotifications
+      .get(stationSerial)
+      ?.filter(
+        (notification) =>
+          notification.device.getSerial() === device.getSerial(),
+      );
+    for (const notification of pending ?? []) {
+      this.sendNotificationEmail(
+        notification.eventType,
+        notification.device,
+        notification.extra,
+        image,
+      );
+      this.removePendingNotification(stationSerial, notification);
+    }
   }
 
   private forwardEvent(
@@ -1200,7 +1252,18 @@ export class EventForwarder {
     if (!this.pendingNotifications.has(serial)) {
       this.pendingNotifications.set(serial, []);
     }
-    this.pendingNotifications.get(serial)!.push({ eventType, device, extra });
+    const notification: PendingNotification = { eventType, device, extra };
+    notification.timeout = setTimeout(() => {
+      const pending = this.pendingNotifications.get(serial);
+      if (pending?.includes(notification)) {
+        this.logger.error(
+          `Snapshot not available for ${eventType} on ${device.getName()} (${device.getSerial()}); sending email without attachment`,
+        );
+        this.sendNotificationEmail(eventType, device, extra);
+        this.removePendingNotification(serial, notification);
+      }
+    }, 60_000);
+    this.pendingNotifications.get(serial)!.push(notification);
     this.logger.info(
       `Queued ${eventType} email notification for ${device.getName()} (${device.getSerial()})`,
     );
@@ -1214,6 +1277,19 @@ export class EventForwarder {
   }
 
   private setupDevice(device: Device): void {
+    device.on(
+      "property changed",
+      (device: Device, name: string, value: PropertyValue) => {
+        if (name === PropertyName.DevicePicture && value) {
+          this.sendPendingDeviceNotifications(
+            device.getStationSerial(),
+            device,
+            value as Picture,
+          );
+        }
+      },
+    );
+
     device.on("motion detected", async (device: Device, state: boolean) => {
       if (state) {
         await this.queueSnapshotNotification("Motion Detected", device);
