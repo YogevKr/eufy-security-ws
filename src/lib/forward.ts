@@ -1201,8 +1201,15 @@ export class EventForwarder {
       this.pendingNotifications.set(serial, []);
     }
     this.pendingNotifications.get(serial)!.push({ eventType, device, extra });
+    this.logger.info(
+      `Queued ${eventType} email notification for ${device.getName()} (${device.getSerial()})`,
+    );
     if (typeof station.downloadImage === "function") {
       station.downloadImage(Date.now().toString());
+    } else {
+      this.logger.error(
+        `Unable to download snapshot for ${eventType}; station ${serial} does not support downloadImage`,
+      );
     }
   }
 
